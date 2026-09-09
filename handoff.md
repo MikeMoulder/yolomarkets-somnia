@@ -1,6 +1,6 @@
 # Handoff
 
-Last updated: 2026-09-09 20:10 UTC
+Last updated: 2026-09-09 21:35 UTC
 
 Repo: https://github.com/MikeMoulder/yolomarkets-somnia
 
@@ -76,13 +76,11 @@ via `npm run somnia:smoke -- --fund`, STT is not.
 - **Chat copilot** (`agent/chat_service.py`, port 8081). SSE streaming with
   five tools; `propose_trade` prices against the live book and emits a
   confirmation card the user signs themselves. **Currently unusable - see
-  Known bugs 1 and 2.**
+  Known bug 1.**
 
-Green as of the last check: `npx tsc --noEmit` clean, `npm run build` exit 0,
-`npm run somnia:smoke` all checks pass against live Shannon, and **61** strategy
-assertions pass. Note that README.md:311, README.md:317 and CLAUDE.md:65 all
-still say **28** - the suite has more than doubled since that number was
-written. Prefer "all strategy checks pass" in docs over a count that rots.
+Green as of 2026-09-09 21:30 UTC, re-verified after the cleanup commit:
+`npx tsc --noEmit` clean, `npm run build` exit 0, and all strategy checks pass.
+Docs no longer quote an assertion count - it rotted twice already.
 
 ## Known bugs
 
@@ -92,54 +90,35 @@ Ranked by what a judge would hit first.
    streams `status: thinking` and then
    `402 - Insufficient credits`. Transport, auth, tools and error propagation
    all work; the model call is the only thing failing. **The copilot cannot be
-   demoed until this is topped up** - and it is a headline feature.
+   demoed until this is topped up** - and it is a headline feature. This is the
+   only known bug left, and it needs a human with a card.
 
-2. **The chat route's fallback port is still wrong, and it will bite on
-   deploy.** `web/app/api/agent/chat/route.ts:22` defaults `AGENT_SERVICE_URL`
-   to `http://127.0.0.1:8080`, which on this machine is
-   `/root/yolomarkets/agent/runner.py` - an unrelated project that answers
-   `/chat` with an empty 200. Locally this is now masked: `web/.env.local` sets
-   `AGENT_SERVICE_URL` explicitly, so the running app does reach 8081 and the
-   proxy is verified working end to end. But the fallback is one missing env
-   var away from silently routing chat into another project. Change the default
-   to 8081, and **set `AGENT_SERVICE_URL` explicitly in the Vercel
-   environment** when deploying.
+Bugs 2-6 in the previous handoff are **fixed** in `cf7e8fc`:
 
-3. **`web/package.json` advertises 12 scripts that do not exist** -
-   `catalog-indexer`, `nanopay-service`, `fast-market-keeper`,
-   `fast-market-swarm`, `polymarket-wrap`, `polymarket-resolution-keeper`,
-   `telegram-suggest`, `telegram-bot`, `generate-fast-market-wallets`,
-   `generate-standalone-wallets`, `sweep-standalone-wallets`,
-   `x402-insight-demo`. Seven dependencies are also unused with zero imports
-   anywhere: `@circle-fin/*` (4), `@x402/*` (2), `jose`. All leftovers from a
-   prior project. Technical Implementation is 25% of the score and
-   `package.json` is opened early.
+- Chat proxy port default 8080 -> 8081. The handoff named
+  `chat/route.ts`; `chat/record/route.ts` had the same wrong default and is
+  fixed too. Still **set `AGENT_SERVICE_URL` explicitly in Vercel** - the code
+  default is localhost, which a hosted runtime cannot reach.
+- `BRIDGE_PORT` default 8090 -> 8091, matching every doc and `.env.example`.
+- `package.json`: 12 phantom scripts and 7 unused deps (`@circle-fin/*`,
+  `@x402/*`, `jose`) removed. Lockfile resynced - 235 packages gone - so
+  `npm ci` resolves on a deploy host.
+- `desk.py`'s undocumented `--once` flag line dropped; the "28 assertions"
+  count in README and CLAUDE.md replaced with wording that does not rot.
+- The narrative tier's dormancy is now stated outright in README and
+  `strategy.py` instead of implied to work.
+- `update_plan.md` opens with a table marking each item superseded, shipped or
+  roadmap, so it no longer reads as outstanding scope.
 
-4. **Doc drift on claims we stake credibility on.**
-   - `agent/desk.py:9` documents a `--once` flag that is not registered.
-     One pass is already the default, so just drop the line.
-   - `web/scripts/bot-bridge.ts:33` defaults `BRIDGE_PORT` to **8090**, but the
-     docs say 8091 and 8090 is occupied on this box. Only `.env` saves it.
-
-5. **The "narrative" pricing tier can never fire.** `desk.py:217` never passes
-   `consensus` or `sentiment`, so `blend_narrative` always returns `None` and
-   every non-feed market is refused. The README wording is accurate but implies
-   a cross-venue capability that does not run. Either wire a consensus source
-   or soften the claim.
-
-6. **`update_plan.md` and the shipped design disagree.** The plan specifies a
-   FastAPI gateway, `@somnia-chain/dreamdex-bot-kit`, Polymarket Gamma
-   ingestion, `agent/ingestion.py` and `agent/economics.py` - none of which
-   exist, because the desk went analytic instead. That was the right call and
-   `strategy.py` opens by explaining exactly why. But the plan reads as
-   outstanding scope to anyone who opens it. Add a one-line header marking
-   which parts are superseded and which are still roadmap.
+The SDK/docs feedback report is written: `FEEDBACK.md`, linked from the README.
 
 ## What is left
 
-In this order.
+Everything remaining needs a human. There is no more engineering to do.
 
-1. **Confirm the deadline.** Everything else depends on it.
+1. **Confirm the deadline.** Everything else depends on it. DoraHacks sits
+   behind an AWS WAF captcha, so this cannot be automated - open the page or
+   the SomniaHacks Telegram in a browser.
 2. **Top up OpenRouter credits** (Known bug 1). Everything else in the chat
    path is verified working; this one 402 is all that stands between the
    copilot and a demo.
@@ -149,10 +128,10 @@ In this order.
 4. **Deploy.** Nothing is deployed; only local `next start`. Vercel is fine -
    `/api/agent/status` already degrades gracefully to "Offline" when the bridge
    is unreachable, so a deploy will not break the page. Set
-   `AGENT_SERVICE_URL` explicitly there (Known bug 2).
-5. If time remains: clear Known bugs 3, 4, 5 and 6, then write the **SDK and
-   docs feedback report**. It is explicitly invited in the submission
-   guidelines and CLAUDE.md's ten traps are already 80% of it.
+   `AGENT_SERVICE_URL` explicitly there.
+
+Optional, if the deadline turns out to be generous: a presentation deck. It is
+the last unstarted item on the scorecard.
 
 ## Requirements scorecard
 
@@ -167,7 +146,7 @@ Checked strictly against `hackathon_requirements.md` and the live docs.
 | GitHub repository | done - public, clean tree, no secrets in history |
 | Prototype accessible on testnet | **missing - nothing deployed** |
 | 2-3 min demo video | **missing** |
-| Optional: SDK/docs feedback report | not started, cheap win |
+| Optional: SDK/docs feedback report | done - `FEEDBACK.md`, 9 findings |
 | Optional: deck | not started |
 
 `@somnia-chain/markets-sdk` >= 0.29.0 is confirmed by the DreamDEX docs as the
@@ -180,16 +159,17 @@ This repo has had **more than one session committing to it concurrently**.
 Four commits landed between `667b87a` and this handoff while an audit was in
 progress, one of which fixed a bug the audit had already written up. Before
 acting on anything below, run `git log --oneline -10` and re-check the specific
-line the note points at. Findings here were verified at 2026-09-09 ~19:45 UTC
-and every one was re-confirmed against HEAD at that time.
+line the note points at. Findings here were verified at 2026-09-09 ~19:45 UTC,
+and the fixes in `cf7e8fc` / `72f9c28` were re-verified against HEAD at 21:30
+UTC (tsc clean, build exit 0, strategy checks pass, tree clean).
 
 ## Ports
 
 3000 Next.js · 8081 chat copilot · 8091 execution bridge.
 
 An unrelated older project on this machine (`/root/yolomarkets`) occupies 8080
-and 8090, which is why these ports were chosen. That collision is no longer
-just a note - it is actively breaking the chat proxy (Known bug 1).
+and 8090, which is why these ports were chosen. The code defaults now point at
+8081/8091, so a missing env var no longer routes chat into that project.
 
 ## Traps worth knowing
 
