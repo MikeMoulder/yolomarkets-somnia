@@ -20,6 +20,12 @@ So the engine is a two-tier thing:
 
 The analytic tier is the one that trades: it is defensible, it is fast enough
 for a 60-second contract, and it does not burn an LLM call per market.
+
+The narrative tier is a typed seam, not a running feature. No caller supplies
+`consensus` or `sentiment` today, so `blend_narrative` always returns None and
+every market that reaches this tier is declined. Wiring a consensus source is
+the one change needed to switch it on; until then the refusal is the honest
+answer, and `desk.py` reports it as one.
 """
 
 from __future__ import annotations
@@ -180,6 +186,11 @@ def blend_narrative(consensus: float | None, sentiment: float | None) -> float |
     """The original plan's model, kept for markets with no price feed.
 
     80% cross-venue consensus, 20% news sentiment mapped from [-1,1] to [0,1].
+
+    Dormant by design: nothing in the desk supplies either input yet, so this
+    returns None on every live call and the caller declines the market. It is
+    the seam a consensus feed plugs into, and it is unit-tested against that
+    day rather than left to be rewritten from scratch.
     """
     if consensus is None and sentiment is None:
         return None

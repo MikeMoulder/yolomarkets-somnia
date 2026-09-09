@@ -1,3 +1,21 @@
+> **Status: historical planning document, partly superseded. Not a to-do list.**
+>
+> This was the pre-build plan. The shipped system diverged from it deliberately,
+> and `README.md` plus `agent/strategy.py` describe what actually runs. Read this
+> for intent, not for outstanding scope.
+>
+> | Plan item | Reality |
+> | --- | --- |
+> | Polymarket Gamma ingestion, `agent/ingestion.py` | **Superseded.** DreamDEX's live corpus is almost entirely price-feed contracts settling in 1-15 minutes off an oracle we can read directly. Those are priced analytically, not by cross-venue consensus. `strategy.py` opens by explaining the call. |
+> | LLM sentiment as the pricing engine | **Superseded.** The LLM drives the chat copilot, not fair value. Pricing a 60-second contract cannot wait on a model call. |
+> | `@somnia-chain/dreamdex-bot-kit` | **Not used.** `@somnia-chain/markets-sdk@0.29.0` is the official Event Contracts surface and is what the bridge is built on. The Bot Kit is a separate optional toolkit. |
+> | FastAPI gateway | **Superseded.** The bridge is the TypeScript process in `web/scripts/bot-bridge.ts`; Python talks to it over HTTP via `bridge_client.py`. The strict split (Python reasons, TypeScript signs) survived; the framework did not. |
+> | `agent/economics.py` | **Never built.** Sizing lives in `strategy.py` (`kelly_size`). |
+> | Order-book market making, Kelly sizing, max-loss position sizing, the terminal | **Shipped.** |
+> | Cross-venue probability arbitrage | **Roadmap.** The seam exists and is typed (`blend_narrative`); no consensus feed is wired behind it, so it never fires. |
+
+---
+
 Here is the fully expanded, granular **`idea.md`** breakdown. It details every single file, contract interaction, data payload, API schema, and execution step needed to convert YOLO Markets into the winning submission.
 
 ---

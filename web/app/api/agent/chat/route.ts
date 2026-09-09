@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // capped by your Vercel plan (Hobby is lower; Pro allows up to 300).
 export const maxDuration = 60;
 
-const AGENT_URL = process.env.AGENT_SERVICE_URL ?? "http://127.0.0.1:8080";
+const AGENT_URL = process.env.AGENT_SERVICE_URL ?? "http://127.0.0.1:8081";
 
 type ChatBody = {
     message?: string;

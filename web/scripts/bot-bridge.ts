@@ -30,7 +30,7 @@ import {
 import { listEventMarkets, getBook, type EventMarket } from "../lib/dreamdex";
 import { getPortfolio } from "../lib/portfolio";
 
-const PORT = Number(process.env.BRIDGE_PORT ?? 8090);
+const PORT = Number(process.env.BRIDGE_PORT ?? 8091);
 const SECRET = process.env.AGENT_BRIDGE_SECRET ?? "";
 const DRY_RUN = process.env.BRIDGE_DRY_RUN !== "0";
 const PK = process.env.SOMNIA_PRIVATE_KEY as `0x${string}` | undefined;

@@ -6,7 +6,7 @@ Usage:
     uv run python desk.py                 # one pass, dry-run (bridge decides)
     uv run python desk.py --watch         # loop forever
     uv run python desk.py --make          # also rest two-sided quotes
-    uv run python desk.py --once --json   # machine-readable single pass
+    uv run python desk.py --json          # machine-readable single pass
 
 The venue owns the markets and the book, so the loop is small and the edge
 comes from pricing rather than from supplying the only liquidity.

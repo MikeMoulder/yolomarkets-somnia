@@ -62,7 +62,7 @@ cd agent && .venv/bin/python desk.py --watch   # the desk
 cd agent && .venv/bin/python chat_service.py   # chat copilot, port 8081
 
 cd web   && npm run somnia:smoke               # connectivity check
-cd agent && .venv/bin/python test_strategy.py  # 28 assertions on the math
+cd agent && .venv/bin/python test_strategy.py  # assertions on the math
 ```
 
 The bridge is **dry-run by default**; `BRIDGE_DRY_RUN=0` makes it sign.

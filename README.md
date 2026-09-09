@@ -218,9 +218,13 @@ testnet that means long-dated contracts are simply refused:
 vol(ETH): 51 x 1d covers 4406400s, need 6771970s - horizon out of reach
 ```
 
-Markets with no price feed (the `BOTNAV` agent-performance series) fall back to
-a cross-venue consensus blend, and are refused outright rather than guessed if
-no consensus exists. Refusing to price is a first-class outcome here.
+Markets with no price feed (the `BOTNAV` agent-performance series) fall through
+to a second tier that would blend cross-venue consensus with news sentiment.
+**No consensus source is wired, so that tier always declines and those markets
+are never traded.** The seam is real and typed (`blend_narrative` in
+`strategy.py`); what is missing is a feed to put behind it. The desk refuses to
+price rather than guessing at a number it cannot defend, which is the behaviour
+we want either way - refusing to price is a first-class outcome here.
 
 ---
 
@@ -319,13 +323,13 @@ agent/
   strategy.py              fair value, Kelly, quoting
   chat_service.py          the streaming chat copilot
   bridge_client.py         the only path from Python to the chain
-  test_strategy.py         28 assertions on the pricing math
+  test_strategy.py         assertions on the pricing math
 ```
 
 ## Testing
 
 ```bash
-cd agent && .venv/bin/python test_strategy.py   # 28 assertions
+cd agent && .venv/bin/python test_strategy.py   # the pricing math
 cd web   && npm run somnia:smoke                # live connectivity
 cd web   && npx tsc --noEmit && npm run build
 ```

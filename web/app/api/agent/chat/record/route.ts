@@ -8,7 +8,7 @@ import { isAddress } from "viem";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const AGENT_URL = process.env.AGENT_SERVICE_URL ?? "http://127.0.0.1:8080";
+const AGENT_URL = process.env.AGENT_SERVICE_URL ?? "http://127.0.0.1:8081";
 
 export async function POST(req: NextRequest) {
     let body: Record<string, unknown>;
