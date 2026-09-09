@@ -35,9 +35,10 @@ import bridge_client as bridge  # noqa: E402
 import strategy as S  # noqa: E402
 
 try:
-    from db import insert_journal
+    from db import insert_journal, insert_decision
 except Exception:  # pragma: no cover - the DB is optional for a dry pass
     insert_journal = None  # type: ignore[assignment]
+    insert_decision = None  # type: ignore[assignment]
 
 DESK_ADDR = (os.environ.get("SOMNIA_ADDRESS") or "desk").lower()
 
@@ -230,6 +231,7 @@ def run_pass(*, make_markets: bool = False,
             log(f"opening prices failed: {e}")
 
     signals: list[S.Signal] = []
+    by_symbol: dict[str, dict] = {}
     for m in markets:
         asset = (m.get("asset") or "").upper()
         strike = strike_for(m, feeds, openings) if asset else None
@@ -259,6 +261,9 @@ def run_pass(*, make_markets: bool = False,
             result.priced += 1
         signals.append(sig)
         result.signals.append(signal_row(sig, m))
+        by_symbol[sig.symbol] = m
+        if not sig.traded:
+            record_decision(sig, m, None, bankroll)
 
     # ---- act ---------------------------------------------------------------
     # Best edge first: if the per-pass cap binds, spend it on the strongest
@@ -280,6 +285,7 @@ def run_pass(*, make_markets: bool = False,
             res["reason"] = sig.reason
             res["edge"] = sig.edge
             result.orders.append(res)
+            record_decision(sig, by_symbol.get(sig.symbol, {}), res, bankroll)
             log(f"{side} {sig.symbol} — {sig.reason}"
                 + ("  [DRY]" if res.get("dryRun") else f"  tx {res.get('txHash')}"))
             journal(kind="trade", market=sig.symbol,
@@ -401,6 +407,67 @@ def claim_settled() -> list[dict]:
         except Exception as e:
             log(f"redeem failed for {pos.get('marketId')}: {e}")
     return out
+
+
+def record_decision(sig: S.Signal, market: dict, order: dict | None,
+                    bankroll: float) -> None:
+    """Persist one decision - taken or passed - to the feed the UI renders.
+
+    Passes are recorded too. A feed of only trades tells you what the desk did
+    and nothing about what it declined, which is most of the work and the only
+    way to see whether the risk gate is doing anything.
+    """
+    if insert_decision is None:
+        return
+
+    fair = sig.fair if sig.fair is not None else 0.0
+    book = sig.book_mid if sig.book_mid is not None else 0.0
+    try:
+        insert_decision({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "market": sig.symbol,
+            "question": sig.question,
+            "category": market.get("interval") or "event",
+            "market_prob": book,
+            "polymarket_prob": None,
+            "polymarket_slug": None,
+            "ai_prob": fair,
+            # The analytic tier is a model output, not a hedged opinion, so the
+            # honest confidence signal is which tier produced it.
+            "ai_confidence": 0.8 if sig.tier == "model" else 0.4,
+            "edge_pts": round(sig.edge * 100, 2),
+            "kelly_fraction": S.KELLY_FRACTION,
+            "bankroll_usdc": bankroll,
+            "action": sig.action,
+            "pass_reason": None if sig.traded else sig.reason,
+            "shares": int(sig.size_contracts * 1e6),
+            "cost_usdc": round(sig.stake, 4),
+            "max_cost_usdc": round(sig.stake, 4),
+            "tx_hash": (order or {}).get("txHash"),
+            "paper": bool((order or {}).get("dryRun", not sig.traded)),
+            "reasoning": sig.reason,
+            "watch_for": [],
+            "time_sensitivity": "high" if market.get("secondsLeft", 0) < 900 else "medium",
+            "user_addr": DESK_ADDR,
+            "agent_addr": DESK_ADDR,
+            "news_summary": "",
+            "tool_trace": [],
+            "brain_model": f"analytic:{sig.tier}",
+            "brain_iterations": None,
+            "prompt_hash": None,
+            "tools_called": [],
+            "external_odds_snapshot": sig.inputs,
+            "policy_snapshot": {
+                "edge_threshold": S.EDGE_THRESHOLD,
+                "kelly_fraction": S.KELLY_FRACTION,
+                "max_position_fraction": S.MAX_POSITION_FRACTION,
+            },
+            "platform_fee_usdc": 0.0,
+            "notification_status": None,
+        })
+    except Exception as e:
+        # The feed is a view, never the trading path.
+        log(f"decision log failed: {e}")
 
 
 def journal(*, kind: str, body: str, title: str = "",

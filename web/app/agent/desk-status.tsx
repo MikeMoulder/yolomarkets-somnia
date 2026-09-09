@@ -38,15 +38,26 @@ export function AgentDeskStatus() {
         };
     }, []);
 
-    const online = s?.online ?? false;
+    // Three states, not two. Before the first fetch resolves we do not KNOW
+    // whether the desk is up, and rendering "Offline" as the server-side
+    // default means every page load flashes a false negative.
+    const state: "checking" | "running" | "offline" =
+        s === null ? "checking" : s.online ? "running" : "offline";
 
     return (
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border border-border bg-bg-elev px-4 py-3">
             <div className="flex items-center gap-2">
                 <span
-                    className={`h-2 w-2 rounded-full ${online ? "animate-pulse bg-live" : "bg-text-faint"}`}
+                    className={`h-2 w-2 rounded-full ${state === "running"
+                        ? "animate-pulse bg-live"
+                        : state === "checking"
+                            ? "animate-pulse bg-text-faint"
+                            : "bg-text-faint"
+                        }`}
                 />
-                <span className="text-[13px] text-text">{online ? "Running" : "Offline"}</span>
+                <span className="text-[13px] text-text">
+                    {state === "running" ? "Running" : state === "checking" ? "Checking…" : "Offline"}
+                </span>
                 {s?.mode ? (
                     <span className="rounded bg-bg px-1.5 py-0.5 font-mono text-[10px] text-text-dim">
                         {s.mode}

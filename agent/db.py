@@ -62,12 +62,26 @@ def _get_pool() -> ConnectionPool:
         #     it, so callers never see the stale socket.
         #   • max_idle below Neon's idle timeout — idle connections are recycled
         #     proactively rather than waiting to be killed server-side.
+        # This project keeps its tables in their own schema so it can share a
+        # Postgres instance without ever reading or writing another project's
+        # rows. The schema CANNOT be set through the connection string here:
+        # the Supabase pooler drops libpq's `options` parameter, so
+        # `?options=-csearch_path%3D...` silently does nothing and everything
+        # lands in `public`. Setting it per connection is what actually works.
+        schema = os.environ.get("DB_SCHEMA", "yolo_somnia")
+
+        def _configure(conn: psycopg.Connection) -> None:
+            with conn.cursor() as cur:
+                cur.execute(f'SET search_path TO "{schema}", public')
+            conn.commit()
+
         _POOL = ConnectionPool(
             url,
             min_size=1,
             max_size=4,
             open=True,
             check=ConnectionPool.check_connection,
+            configure=_configure,
             max_idle=float(os.environ.get("AGENT_DB_MAX_IDLE_S", "120")),
         )
         atexit.register(_close_pool)

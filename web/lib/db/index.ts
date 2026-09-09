@@ -52,6 +52,13 @@ const client =
                 connection: {
                     // Server-side ceiling on any single query, for the same reason.
                     statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT_MS ?? 15_000),
+                    // Our tables live in their own schema so this project can
+                    // share a Postgres instance without ever reading another
+                    // project's rows. This CANNOT go in the connection string:
+                    // the Supabase pooler drops libpq's `options` parameter, so
+                    // `?options=-csearch_path%3D...` silently does nothing and
+                    // every query resolves against `public` instead.
+                    search_path: `${process.env.DB_SCHEMA ?? "yolo_somnia"}, public`,
                 },
             }))
         : undefined;
