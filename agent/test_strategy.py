@@ -174,6 +174,25 @@ check(not S.vol_window_ok(86400, 51, 45 * 86400),
       "51 daily bars do NOT cover a 45-day horizon (the live case)")
 check(S.vol_window_ok(60, 120, 3600), "120 one-minute bars cover a 1h horizon")
 
+
+# --- averaging-down guard ---------------------------------------------------
+# Exposure is measured at MARK, so a position moving against us is worth less,
+# which frees headroom, which lets the desk buy more of the losing thing. Seen
+# live: a YES position decayed to 0.06, the cap re-opened, and two consecutive
+# passes spent ~1,500 tUSDC more on the same contract.
+print()
+check(S.ONE_POSITION_PER_MARKET, "one-position-per-market is on by default")
+losing = S.evaluate(symbol="s", question="q", seconds_left=600, best_bid=0.30,
+                    best_ask=0.35, bankroll=1000, spot=2600.0, strike=2494.0,
+                    annual_vol=0.6, existing_exposure=float("inf"))
+check(losing.action == "pass", "a market we already hold is closed to new entries",
+      losing.reason)
+# The decayed-mark case: tiny remaining value must NOT reopen the cap when the
+# market is already held. That is enforced by the caller passing inf, so assert
+# the sizing function honours it rather than treating inf as "lots of room".
+check(S.kelly_size(0.95, 0.20, 1000, existing_exposure=float("inf")) == 0.0,
+      "inf exposure yields zero stake, not a large one")
+
 print()
 print(f"{len(fails)} failed" if fails else "all strategy checks passed")
 sys.exit(1 if fails else 0)

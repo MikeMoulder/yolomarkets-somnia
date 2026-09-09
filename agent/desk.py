@@ -351,7 +351,7 @@ def rest_quotes(signals: list[S.Signal], bankroll: float) -> list[dict]:
 
 
 def current_exposure() -> dict[str, float] | None:
-    """Marked value of open positions, keyed by marketId. None if unreadable.
+    """Exposure per marketId, as the cap should see it. None if unreadable.
 
     Both sides of a market count toward the same cap: holding YES and NO in one
     contract is still capital committed to it, and netting them here would let
@@ -373,7 +373,13 @@ def current_exposure() -> dict[str, float] | None:
         mid = pos.get("marketId")
         if not mid:
             continue
-        out[mid] = out.get(mid, 0.0) + float(pos.get("value") or 0.0)
+        if S.ONE_POSITION_PER_MARKET and float(pos.get("contracts") or 0) > 0:
+            # Infinite exposure = refuse. ANY holding closes the market to
+            # further entries, so a decaying mark can never re-open the cap and
+            # let the desk average down into a position moving against it.
+            out[mid] = float("inf")
+        elif out.get(mid) != float("inf"):
+            out[mid] = out.get(mid, 0.0) + float(pos.get("value") or 0.0)
     return out
 
 

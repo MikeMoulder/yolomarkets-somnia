@@ -50,6 +50,19 @@ MAX_POSITION_FRACTION = float(os.environ.get("AGENT_MAX_POSITION_FRACTION", "0.1
 # before settlement, and vol estimates degrade at very short horizons.
 MIN_SECONDS_TO_EXPIRY = int(os.environ.get("AGENT_MIN_TTE_SECONDS", "45"))
 
+# Take at most ONE position per market, ever.
+#
+# The cap alone is not enough, because exposure is measured at MARK. A position
+# moving against us is worth less, which frees headroom, which lets the desk buy
+# more of the thing that is losing - automatic averaging-down, and the fastest
+# way to turn a wrong model into a wrong portfolio. Seen live: a YES position
+# decayed to 0.06, the cap re-opened, and the desk spent ~1,500 tUSDC more on
+# the same contract across two consecutive passes.
+#
+# The principled fix is a cost-basis cap. This is the safe one, and for
+# minutes-long contracts "one entry per market" costs almost nothing.
+ONE_POSITION_PER_MARKET = os.environ.get("AGENT_ONE_POSITION_PER_MARKET", "1") != "0"
+
 # Volatility floor/ceiling as annualised decimals. Guards against a flat feed
 # (which would make every contract look like a certainty) and against a single
 # bad tick blowing the estimate up.
