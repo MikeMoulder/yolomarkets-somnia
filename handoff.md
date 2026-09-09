@@ -4,20 +4,21 @@ Last updated: 2026-09-09
 
 Repo: https://github.com/MikeMoulder/yolomarkets-somnia
 
-## THE ONE BLOCKER
+## Status: live and trading
 
-**The desk wallet holds 0 STT and cannot place a single order.**
+The desk wallet is funded and trading on Somnia Shannon.
 
 ```
 0xa92F9706146542d30a6E3b8C48eB996fF3D9175e
 ```
 
-Fund it from the Somnia testnet faucet or the SomniaHacks Telegram. Gas is
-**STT**; collateral is **tUSDC** and is self-serve once gas exists
-(`npm run somnia:smoke -- --fund`, or `POST /faucet` on the bridge).
+Proven on chain: faucet mint, a manual order filled in full, and two orders the
+desk chose, priced and sized on its own. Transaction hashes are in the README.
+Settlement detection works (a losing position was correctly marked worthless
+and excluded from claimable).
 
-Everything below is built and verified against live Shannon EXCEPT the signing
-of a real order, which is blocked on this and nothing else.
+Gas is STT, collateral is tUSDC, and they are unrelated: tUSDC is self-serve
+via `npm run somnia:smoke -- --fund`, STT is not.
 
 ## What works
 

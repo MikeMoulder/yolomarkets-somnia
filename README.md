@@ -75,6 +75,34 @@ so a "$5 max loss" order can never spend $5.01.
 
 ---
 
+## Verified on-chain
+
+Every claim below is a transaction on Somnia Shannon, not a screenshot.
+
+| What | Transaction |
+| --- | --- |
+| Collateral minted from the venue faucet | [`0x6dab7cea`](https://shannon-explorer.somnia.network/tx/0x6dab7cea47b93dd56dfbf00e19a5e5c2debe1c9b95c9bbe0dde0372821e87092) |
+| Manual order, filled in full | [`0xcf3bb528`](https://shannon-explorer.somnia.network/tx/0xcf3bb52843a076ca641868fedfe963ce4ffee08f41b2aaf72252d347f31646ee) |
+| **Agent trade** - NO at an 8.6pt edge | [`0xa35eb82f`](https://shannon-explorer.somnia.network/tx/0xa35eb82ffc4fd8726489c202f92b870ee2e72b5a3fc19ac2e04c10fa2868d63b) |
+| **Agent trade** - YES at a 4.7pt edge | [`0x179bf5ad`](https://shannon-explorer.somnia.network/tx/0x179bf5adca364ee3c41f9e295724f4eca301a832c965c49d45221d162c0ba8a4) |
+
+Desk wallet: [`0xa92F9706146542d30a6E3b8C48eB996fF3D9175e`](https://shannon-explorer.somnia.network/address/0xa92F9706146542d30a6E3b8C48eB996fF3D9175e)
+
+The two agent trades were chosen, priced and sized by the desk with no human in
+the loop. Its own log for them:
+
+```
+NO  BTC-0-19OCT26/tUSDC        fair 0.409 vs NO ask 0.505 - 8.6pt edge on NO (model)
+YES ETH-248116-09SEP26-1905    fair 0.574 vs ask 0.527    - 4.7pt edge on YES (model)
+14 markets - 14 priced - 2 orders - 12 passes
+```
+
+The second one lost. ETH needed to close at or above 2481.16 and did not, so
+the position settled worthless and the portfolio marks it as such. A 57% call
+losing is not a bug, and the desk is built to report that rather than hide it.
+
+---
+
 ## Architecture
 
 ```
