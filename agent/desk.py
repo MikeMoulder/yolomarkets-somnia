@@ -99,17 +99,45 @@ class FeedCache:
                 self._spot[asset] = None
         return self._spot[asset]
 
-    def vol(self, asset: str) -> float | None:
-        if asset not in self._vol:
-            try:
-                rows = bridge.candles(asset, "1m", VOL_CANDLES)
-                # OHLCV rows are [ts, open, high, low, close, volume].
-                closes = [float(r[4]) for r in rows if len(r) >= 5]
-                self._vol[asset] = S.realized_vol(closes, 60.0)
-            except Exception as e:
-                log(f"vol({asset}) failed: {e}")
-                self._vol[asset] = None
-        return self._vol[asset]
+    def vol(self, asset: str, seconds_left: float) -> float | None:
+        """Realized volatility sampled at a bar size matched to the horizon.
+
+        A single 1-hour estimate cannot price a 45-day contract: intraday
+        variance sits far below multi-day variance, so the estimate comes out
+        low, d2 comes out large, and a coin flip prices as a 0.41 edge. We
+        therefore choose the bar from the horizon and REFUSE when the venue
+        cannot return enough history to cover it.
+        """
+        sampling = S.vol_sampling(seconds_left)
+        if sampling is None:
+            return None
+        bar, want, timeframe = sampling
+
+        key = f"{asset}:{timeframe}:{want}"
+        if key in self._vol:
+            return self._vol[key]
+
+        try:
+            rows = bridge.candles(asset, timeframe, want)
+            # OHLCV rows are [ts, open, high, low, close, volume].
+            closes = [float(r[4]) for r in rows if len(r) >= 5]
+        except Exception as e:
+            log(f"vol({asset}, {timeframe}) failed: {e}")
+            self._vol[key] = None
+            return None
+
+        # The request is not the guarantee. A young venue simply does not have
+        # 90 daily candles, and pricing off the 12 it does have would be the
+        # original bug wearing a bigger bar size.
+        if not S.vol_window_ok(bar, len(closes), seconds_left):
+            log(f"vol({asset}): {len(closes)} x {timeframe} covers "
+                f"{len(closes) * bar}s, need {S.MIN_WINDOW_TO_HORIZON * seconds_left:.0f}s "
+                f"- horizon out of reach")
+            self._vol[key] = None
+            return None
+
+        self._vol[key] = S.realized_vol(closes, float(bar))
+        return self._vol[key]
 
 
 def strike_for(market: dict, feeds: FeedCache, openings: dict[str, str | None]) -> float | None:
@@ -206,7 +234,7 @@ def run_pass(*, make_markets: bool = False,
         asset = (m.get("asset") or "").upper()
         strike = strike_for(m, feeds, openings) if asset else None
         spot = feeds.spot(asset) if asset else None
-        vol = feeds.vol(asset) if asset else None
+        vol = feeds.vol(asset, float(m["secondsLeft"])) if asset else None
 
         try:
             b = bridge.book(m["yesSymbol"], BOOK_DEPTH)

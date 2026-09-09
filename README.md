@@ -192,9 +192,24 @@ Edge is measured against **the price we would pay**, never the mid. On a
 32-point-wide book the mid always looks cheap while the ask does not - measuring
 from the mid is exactly how a backtest prints profit a live book never pays.
 
-Markets with no price feed (e.g. the `BOTNAV` agent-performance series) fall
-back to a cross-venue consensus blend, and are refused outright rather than
-guessed if no consensus exists.
+That last input is the one that bites. Estimate volatility from an hour of
+one-minute candles and then price a 45-day contract with it, and the answer is
+badly wrong in a specific direction: intraday variance sits far below multi-day
+variance, so the estimate comes out low, d2 comes out large, and a coin flip
+prices as a 0.41 "edge". The desk went 0 for 3 on settled positions before this
+was caught.
+
+So the sampling window has to cover at least twice the contract's horizon, and
+the check is on the data actually returned, not the data requested. On this
+testnet that means long-dated contracts are simply refused:
+
+```
+vol(ETH): 51 x 1d covers 4406400s, need 6771970s - horizon out of reach
+```
+
+Markets with no price feed (the `BOTNAV` agent-performance series) fall back to
+a cross-venue consensus blend, and are refused outright rather than guessed if
+no consensus exists. Refusing to price is a first-class outcome here.
 
 ---
 

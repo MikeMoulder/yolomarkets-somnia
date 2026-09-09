@@ -145,6 +145,35 @@ blind = S.evaluate(symbol="s", question="q", seconds_left=300, best_bid=0.30,
                    annual_vol=0.6, existing_exposure=float("inf"))
 check(blind.action == "pass", "evaluate refuses to open when exposure is unknown")
 
+
+# --- volatility sampling must match the horizon -----------------------------
+# The bug this guards: volatility was estimated from 60 one-minute candles (a
+# one-hour window) and used to price contracts up to 45 days out. Intraday
+# variance sits far below multi-day variance, so the estimate came out low, d2
+# came out large, and a coin flip priced as a 0.41 edge. The desk went 0 for 3
+# on settled positions before this was found.
+print()
+for tte in (60, 300, 900, 3600):
+    r = S.vol_sampling(tte)
+    check(r is not None and r[0] == 60, f"{tte}s horizon samples 1m bars", str(r))
+check(S.vol_sampling(14400)[0] == 3600, "4h horizon steps up to 1h bars")
+check(S.vol_sampling(86400)[0] == 3600, "24h horizon uses 1h bars")
+check(S.vol_sampling(45 * 86400)[0] == 86400, "45d horizon steps up to 1d bars")
+check(S.vol_sampling(10 * 365 * 86400) is None, "absurd horizon is out of reach")
+
+for tte in (60, 3600, 14400, 86400):
+    bar, bars, _ = S.vol_sampling(tte)
+    check(bar * bars >= S.MIN_WINDOW_TO_HORIZON * tte,
+          f"{tte}s: sampled window covers the horizon",
+          f"{bar * bars}s vs {S.MIN_WINDOW_TO_HORIZON * tte}s")
+    check(bars <= S.MAX_VOL_BARS, f"{tte}s: bar count fits one request", str(bars))
+    check(bars >= S.MIN_VOL_BARS, f"{tte}s: enough bars to estimate", str(bars))
+
+# The request is not the guarantee: a young venue returns fewer bars than asked.
+check(not S.vol_window_ok(86400, 51, 45 * 86400),
+      "51 daily bars do NOT cover a 45-day horizon (the live case)")
+check(S.vol_window_ok(60, 120, 3600), "120 one-minute bars cover a 1h horizon")
+
 print()
 print(f"{len(fails)} failed" if fails else "all strategy checks passed")
 sys.exit(1 if fails else 0)

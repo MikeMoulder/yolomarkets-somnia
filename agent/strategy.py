@@ -56,6 +56,22 @@ MIN_SECONDS_TO_EXPIRY = int(os.environ.get("AGENT_MIN_TTE_SECONDS", "45"))
 MIN_ANNUAL_VOL = float(os.environ.get("AGENT_MIN_ANNUAL_VOL", "0.20"))
 MAX_ANNUAL_VOL = float(os.environ.get("AGENT_MAX_ANNUAL_VOL", "3.00"))
 
+# What the ORACLE PRICE FEED serves, which is not the same set the market
+# candle index serves - the feed offers only these three.
+PRICE_FEED_BARS = ((60, "1m"), (3600, "1h"), (86400, "1d"))
+
+# Bars requested per volatility estimate. The floor is what makes an estimate
+# meaningful at all; the ceiling is what the indexer will serve in one call.
+MIN_VOL_BARS = int(os.environ.get("AGENT_MIN_VOL_BARS", "30"))
+MAX_VOL_BARS = int(os.environ.get("AGENT_MAX_VOL_BARS", "300"))
+
+# The sampling window must cover at least this multiple of the contract's
+# horizon. Estimating a 45-day volatility from one hour of ticks is not a small
+# error - intraday variance is far below multi-day variance, so the estimate
+# comes out low, d2 comes out large, and a coin flip prices as a 0.41 edge.
+# Refusing to price is the correct answer when the data cannot support it.
+MIN_WINDOW_TO_HORIZON = float(os.environ.get("AGENT_MIN_WINDOW_RATIO", "2.0"))
+
 SECONDS_PER_YEAR = 365.0 * 24 * 3600
 
 Action = Literal["buy_yes", "buy_no", "pass"]
@@ -120,6 +136,31 @@ def probability_above(spot: float, strike: float, seconds_left: float,
     # finishing in the money.
     d2 = (math.log(spot / strike) - 0.5 * sigma_sqrt_tau ** 2) / sigma_sqrt_tau
     return _norm_cdf(d2)
+
+
+def vol_sampling(seconds_left: float) -> tuple[int, int, str] | None:
+    """Pick (bar_seconds, bar_count, timeframe_label) for a horizon, or None.
+
+    Walks the feed's bar sizes finest-first and takes the first that can cover
+    MIN_WINDOW_TO_HORIZON x the horizon within one request. Finer bars give a
+    better estimate, but a 45-day contract sampled in minutes needs 100k+ bars,
+    so past a point the only honest move is a coarser bar - and past THAT, no
+    answer at all.
+
+    None means the horizon is out of reach. That is a real answer: skip the
+    contract rather than price it off whatever history happens to exist.
+    """
+    for bar, label in PRICE_FEED_BARS:
+        needed = math.ceil(MIN_WINDOW_TO_HORIZON * seconds_left / bar)
+        bars = max(MIN_VOL_BARS, needed)
+        if bars <= MAX_VOL_BARS:
+            return bar, bars, label
+    return None
+
+
+def vol_window_ok(bar_seconds: int, bars: int, seconds_left: float) -> bool:
+    """Whether the sampled window actually covers this horizon."""
+    return bar_seconds * bars >= MIN_WINDOW_TO_HORIZON * seconds_left
 
 
 def blend_narrative(consensus: float | None, sentiment: float | None) -> float | None:
