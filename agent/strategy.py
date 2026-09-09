@@ -236,6 +236,19 @@ def kelly_size(p_win: float, price: float, bankroll: float,
 # Decision
 # --------------------------------------------------------------------------
 
+def _cap_to_depth(stake: float, price: float, available: float | None) -> float:
+    """Trim a stake to what the book can actually fill at `price`.
+
+    Without this the desk sizes a 500-contract order into a book holding 200,
+    takes a partial fill, and leaves the remainder resting - which locks
+    collateral it thinks is free and gives it a position it thinks is bigger
+    than it is. Observed live: ten resting orders holding ~2,000 tUSDC.
+    """
+    if available is None or available <= 0 or price <= 0:
+        return stake
+    return min(stake, available * price)
+
+
 @dataclass
 class Signal:
     action: Action
@@ -271,12 +284,18 @@ def evaluate(
     consensus: float | None = None,
     sentiment: float | None = None,
     existing_exposure: float = 0.0,
+    yes_ask_size: float | None = None,
+    no_ask_size: float | None = None,
 ) -> Signal:
     """Price one contract and decide.
 
     `best_bid`/`best_ask` are the YES side of the book. Buying NO means lifting
     the mirror of the YES bid, because Up and Down share one book and a NO ask
     is 1 minus a YES bid.
+
+    `yes_ask_size` / `no_ask_size` are how many contracts actually rest at that
+    price. Sizing past them does not get you a bigger position - it gets you a
+    partial fill and a resting remainder that locks collateral until it expires.
     """
     inputs = {
         "seconds_left": seconds_left,
@@ -326,6 +345,7 @@ def evaluate(
 
     if yes_edge >= no_edge and yes_edge > EDGE_THRESHOLD and yes_cost is not None:
         stake = kelly_size(fair, yes_cost, bankroll, existing_exposure)
+        stake = _cap_to_depth(stake, yes_cost, yes_ask_size)
         if stake <= 0:
             return nope(
                 "position cap reached for this market" if existing_exposure > 0
@@ -340,6 +360,7 @@ def evaluate(
 
     if no_edge > EDGE_THRESHOLD and no_cost is not None:
         stake = kelly_size(1.0 - fair, no_cost, bankroll, existing_exposure)
+        stake = _cap_to_depth(stake, no_cost, no_ask_size)
         if stake <= 0:
             return nope(
                 "position cap reached for this market" if existing_exposure > 0

@@ -256,6 +256,12 @@ def run_pass(*, make_markets: bool = False,
             annual_vol=vol,
             existing_exposure=(exposure.get(m["marketId"], 0.0)
                                if exposure is not None else float("inf")),
+            # Top-of-book size on each side. We only ever price at the best
+            # level, so that is exactly the depth an order can consume.
+            yes_ask_size=(b.get("asks") or [[None, None]])[0][1]
+            if b.get("asks") else None,
+            no_ask_size=(b.get("bids") or [[None, None]])[0][1]
+            if b.get("bids") else None,
         )
         if sig.fair is not None:
             result.priced += 1

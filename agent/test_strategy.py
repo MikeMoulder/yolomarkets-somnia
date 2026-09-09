@@ -193,6 +193,36 @@ check(losing.action == "pass", "a market we already hold is closed to new entrie
 check(S.kelly_size(0.95, 0.20, 1000, existing_exposure=float("inf")) == 0.0,
       "inf exposure yields zero stake, not a large one")
 
+
+# --- size must not exceed what the book can fill ----------------------------
+# Sizing past top-of-book does not buy a bigger position; it buys a partial
+# fill plus a resting remainder that locks collateral. Seen live: ten resting
+# orders holding ~2,000 tUSDC while the desk believed it was flat.
+print()
+deep = S.evaluate(symbol="s", question="q", seconds_left=600, best_bid=0.30,
+                  best_ask=0.35, bankroll=1000, spot=2600.0, strike=2494.0,
+                  annual_vol=0.6, yes_ask_size=100000)
+thin = S.evaluate(symbol="s", question="q", seconds_left=600, best_bid=0.30,
+                  best_ask=0.35, bankroll=1000, spot=2600.0, strike=2494.0,
+                  annual_vol=0.6, yes_ask_size=50)
+check(deep.action == "buy_yes" and thin.action == "buy_yes", "both still trade")
+check(thin.size_contracts <= 50 + 1e-9, "thin book caps size at available depth",
+      f"{thin.size_contracts:.3f} contracts vs 50 available")
+check(deep.size_contracts > thin.size_contracts,
+      "deep book allows the full Kelly size",
+      f"{deep.size_contracts:.1f} vs {thin.size_contracts:.1f}")
+check(abs(S._cap_to_depth(100.0, 0.5, None) - 100.0) < 1e-9,
+      "unknown depth does not cap")
+check(abs(S._cap_to_depth(100.0, 0.5, 40) - 20.0) < 1e-9,
+      "cap converts contracts to stake at price", "40 x 0.5 = 20")
+
+no_thin = S.evaluate(symbol="s", question="q", seconds_left=600, best_bid=0.70,
+                     best_ask=0.75, bankroll=1000, spot=2380.0, strike=2494.0,
+                     annual_vol=0.6, no_ask_size=25)
+check(no_thin.action == "buy_no" and no_thin.size_contracts <= 25 + 1e-9,
+      "NO side is capped by the mirrored bid depth",
+      f"{no_thin.size_contracts:.3f} vs 25")
+
 print()
 print(f"{len(fails)} failed" if fails else "all strategy checks passed")
 sys.exit(1 if fails else 0)
