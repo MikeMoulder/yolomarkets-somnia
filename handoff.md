@@ -1,6 +1,6 @@
 # Handoff
 
-Last updated: 2026-09-09 19:45 UTC
+Last updated: 2026-09-09 20:10 UTC
 
 Repo: https://github.com/MikeMoulder/yolomarkets-somnia
 
@@ -30,7 +30,18 @@ The desk wallet is funded and has traded on Somnia Shannon.
 0xa92F9706146542d30a6E3b8C48eB996fF3D9175e
 ```
 
-Balances read from chain on 9 Sep: **49.95 STT**, **7,279 tUSDC**, nonce 15.
+Balances read from chain: **49.85 STT**, **4,485 tUSDC**.
+
+The drawdown from 10,000 is real and mostly explained: long-dated contracts
+priced off a one-hour volatility estimate (fixed), and an averaging-down loop
+where a decaying mark reopened the position cap (fixed). Both are in the git
+history with the numbers.
+
+**The full lifecycle is now closed on chain** - fund, price, order, fill,
+settle, redeem - with no human in it. The desk redeemed two settled winners for
+259.303 and 43.750 tUSDC; the wallet moved 4,182.24 -> 4,485.30, the same
+303.053. Redemption hashes `0x4fc0cdf5` and `0xbe5d8d57`, both to
+BinaryMarketsModule.
 
 Four transactions, all re-verified against the RPC (`status=0x1`, all sent from
 the desk wallet). Hashes are in the README:
