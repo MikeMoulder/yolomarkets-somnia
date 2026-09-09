@@ -57,6 +57,15 @@ export type DecisionFilter = {
     marketAddresses?: Set<string>;
     categories?: Set<string>;
     userAddr?: string;
+    /**
+     * Restrict to these actions.
+     *
+     * The desk logs a row per market per pass, so passes outnumber trades by
+     * roughly twenty to one. Reading "the most recent N" and hoping trades are
+     * in there shows zero trades on a desk that has traded all day - the feed
+     * has to ask for them.
+     */
+    actions?: AgentAction[];
 };
 
 export type DecisionsFeed = {
@@ -121,6 +130,9 @@ export async function readDecisions(
             } else {
                 conditions.push(eq(agentDecisions.userAddr, want));
             }
+        }
+        if (filter?.actions && filter.actions.length > 0) {
+            conditions.push(inArray(agentDecisions.action, filter.actions));
         }
         if (filter?.categories && filter.categories.size > 0) {
             conditions.push(

@@ -10,13 +10,23 @@ export const dynamic = "force-dynamic";
 const DESK_ADDRESS = process.env.NEXT_PUBLIC_AGENT_ADDRESS ?? "";
 
 export default async function AgentPage() {
-    const [feed, journal] = await Promise.all([
-        withDeadline(readDecisions(40), SSR_DEADLINE_MS, "readDecisions", null),
+    // Two reads, because passes outnumber trades ~20:1 and a single "most
+    // recent N" query is all passes.
+    const [tradeFeed, passFeed, journal] = await Promise.all([
+        withDeadline(
+            readDecisions(20, { actions: ["buy_yes", "buy_no"] }),
+            SSR_DEADLINE_MS, "readDecisions:trades", null,
+        ),
+        withDeadline(
+            readDecisions(10, { actions: ["pass"] }),
+            SSR_DEADLINE_MS, "readDecisions:passes", null,
+        ),
         withDeadline(readJournal(20), SSR_DEADLINE_MS, "readJournal", [] as JournalEntry[]),
     ]);
 
-    const decisions = feed?.decisions ?? [];
-    const traded = decisions.filter((d) => d.action !== "pass");
+    const traded = tradeFeed?.decisions ?? [];
+    const passed = passFeed?.decisions ?? [];
+    const decisions = [...traded, ...passed];
 
     return (
         <div className="mx-auto max-w-[1100px] px-6 py-8">
@@ -45,14 +55,26 @@ export default async function AgentPage() {
             <div className="mt-6 grid gap-4 lg:grid-cols-[1.15fr_1fr]">
                 <Panel
                     title="Decisions"
-                    subtitle={`${traded.length} trades · ${decisions.length - traded.length} passes`}
+                    subtitle={`${traded.length} trades · ${passed.length} passes`}
                 >
                     {decisions.length === 0 ? (
                         <Muted>
                             No decisions logged yet. Start the agent runner to populate this feed.
                         </Muted>
                     ) : (
-                        decisions.slice(0, 20).map((d, i) => <DecisionRow key={i} d={d} />)
+                        <>
+                            {traded.slice(0, 12).map((d, i) => (
+                                <DecisionRow key={`t${i}`} d={d} />
+                            ))}
+                            {passed.length > 0 ? (
+                                <div className="border-t border-border bg-bg/40 px-4 py-2 text-[10px] uppercase tracking-wider text-text-faint">
+                                    passed on
+                                </div>
+                            ) : null}
+                            {passed.slice(0, 10).map((d, i) => (
+                                <DecisionRow key={`p${i}`} d={d} />
+                            ))}
+                        </>
                     )}
                 </Panel>
 
