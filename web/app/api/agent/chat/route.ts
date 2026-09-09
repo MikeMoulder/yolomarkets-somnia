@@ -52,8 +52,13 @@ export async function POST(req: NextRequest) {
     if (message.length > MAX_CHARS) return bad("message is too long");
     if (!isAddress(userAddr)) return bad("a connected wallet is required");
 
+    // DreamDEX markets are identified by SYMBOL ("ETH-0-09SEP26-2000/tUSDC"),
+    // not by address, so this is a shape check rather than an address check.
     const currentMarket = (body.currentMarket ?? "").trim();
-    const marketHint = isAddress(currentMarket) ? currentMarket : undefined;
+    const marketHint =
+        currentMarket.includes("/") && currentMarket.length <= 120
+            ? currentMarket
+            : undefined;
 
     // Keep only the last few turns and only the fields the agent needs.
     const history = (Array.isArray(body.history) ? body.history : [])

@@ -409,13 +409,33 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         b = self._body()
+
+        # The web proxy speaks {message, user_addr, history, current_market};
+        # a direct caller may send an OpenAI-style {messages, user}. Accept
+        # both so the service is testable with curl without pretending the
+        # browser sends a shape it does not.
+        messages = b.get("messages")
+        if not messages:
+            history = [
+                {"role": h.get("role"), "content": h.get("content")}
+                for h in (b.get("history") or [])
+                if h.get("role") in ("user", "assistant") and h.get("content")
+            ]
+            messages = history + [{"role": "user", "content": b.get("message") or ""}]
+        user = b.get("user") or b.get("user_addr")
+        market_hint = b.get("current_market")
+        if market_hint:
+            messages = [{"role": "system",
+                         "content": f'The user is looking at market "{market_hint}".'}
+                        ] + messages
+
         self.send_response(200)
         self.send_header("content-type", "text/event-stream")
         self.send_header("cache-control", "no-cache")
         self.send_header("connection", "close")
         self.end_headers()
         try:
-            for frame in chat_turn(b.get("messages") or [], b.get("user")):
+            for frame in chat_turn(messages, user):
                 self.wfile.write(frame)
                 self.wfile.flush()
         except (BrokenPipeError, ConnectionResetError):
