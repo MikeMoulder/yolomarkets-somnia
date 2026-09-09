@@ -408,8 +408,13 @@ def claim_settled() -> list[dict]:
             res["question"] = pos.get("question")
             res["amount"] = claimable
             out.append(res)
-            log(f"redeemed {claimable:.3f} on {pos.get('question', '')[:60]}"
-                + ("  [DRY]" if res.get("dryRun") else ""))
+            log(f"redeemed {claimable:.3f} on {pos.get('question', '')[:52]}"
+                + ("  [DRY]" if res.get("dryRun")
+                   else f"  tx {res.get('txHash')}"))
+            journal(kind="trade", market=pos.get("marketId"),
+                    title=f"Redeemed {claimable:.3f} tUSDC",
+                    body=f"Settled winner on {pos.get('question', '')}",
+                    meta={"redeem": res})
         except Exception as e:
             log(f"redeem failed for {pos.get('marketId')}: {e}")
     return out

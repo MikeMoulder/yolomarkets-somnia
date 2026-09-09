@@ -85,6 +85,8 @@ Every claim below is a transaction on Somnia Shannon, not a screenshot.
 | Manual order, filled in full | [`0xcf3bb528`](https://shannon-explorer.somnia.network/tx/0xcf3bb52843a076ca641868fedfe963ce4ffee08f41b2aaf72252d347f31646ee) |
 | **Agent trade** - NO at an 8.6pt edge | [`0xa35eb82f`](https://shannon-explorer.somnia.network/tx/0xa35eb82ffc4fd8726489c202f92b870ee2e72b5a3fc19ac2e04c10fa2868d63b) |
 | **Agent trade** - YES at a 4.7pt edge | [`0x179bf5ad`](https://shannon-explorer.somnia.network/tx/0x179bf5adca364ee3c41f9e295724f4eca301a832c965c49d45221d162c0ba8a4) |
+| **Agent redemption** - 259.303 tUSDC | [`0x4fc0cdf5`](https://shannon-explorer.somnia.network/tx/0x4fc0cdf54467e24aa630b8a22be4735d77f74e3e3d0e60f0d55e320716cf1bea) |
+| **Agent redemption** - 43.750 tUSDC | [`0xbe5d8d57`](https://shannon-explorer.somnia.network/tx/0xbe5d8d579dfb20194ce1105532dd094124a467a35af964131915a2dfa0b0a371) |
 
 Desk wallet: [`0xa92F9706146542d30a6E3b8C48eB996fF3D9175e`](https://shannon-explorer.somnia.network/address/0xa92F9706146542d30a6E3b8C48eB996fF3D9175e)
 
@@ -100,6 +102,15 @@ YES ETH-248116-09SEP26-1905    fair 0.574 vs ask 0.527    - 4.7pt edge on YES (m
 The second one lost. ETH needed to close at or above 2481.16 and did not, so
 the position settled worthless and the portfolio marks it as such. A 57% call
 losing is not a bug, and the desk is built to report that rather than hide it.
+
+The two redemptions close the loop. Payout on DreamDEX is a pull: a winning
+position sits as an unclaimed balance until someone redeems it, so the desk
+settles first on every pass, before it looks for anything new to buy. Those two
+calls returned 303.053 tUSDC and the wallet balance moved 4,182.24 -> 4,485.30,
+which is the same number.
+
+That is the full lifecycle on chain, with no human in it: fund, price, order,
+fill, settle, redeem.
 
 ---
 
