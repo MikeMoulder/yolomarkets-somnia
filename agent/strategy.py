@@ -137,11 +137,19 @@ def blend_narrative(consensus: float | None, sentiment: float | None) -> float |
     return max(0.01, min(0.99, fair))
 
 
-def kelly_size(p_win: float, price: float, bankroll: float) -> float:
+def kelly_size(p_win: float, price: float, bankroll: float,
+               existing_exposure: float = 0.0) -> float:
     """Fractional-Kelly stake in collateral units.
 
     On a binary bought at `price`, a winning contract returns 1, so the net
     odds are b = (1 - price) / price and the Kelly fraction is (p*b - q)/b.
+
+    `existing_exposure` is what we already hold in this market, at cost. The
+    position cap applies to the TOTAL, not to each order: without that, a desk
+    that runs every 45 seconds re-buys the same standing edge on every pass and
+    quietly compounds one contract into half the book. Observed live - 2,913
+    contracts in a single market across a handful of passes, each individual
+    order comfortably inside the per-order cap.
     """
     if not (0.0 < price < 1.0) or bankroll <= 0:
         return 0.0
@@ -153,7 +161,10 @@ def kelly_size(p_win: float, price: float, bankroll: float) -> float:
         return 0.0
 
     stake = bankroll * f * KELLY_FRACTION
-    return max(0.0, min(stake, bankroll * MAX_POSITION_FRACTION))
+    headroom = bankroll * MAX_POSITION_FRACTION - max(0.0, existing_exposure)
+    if headroom <= 0:
+        return 0.0
+    return max(0.0, min(stake, headroom))
 
 
 # --------------------------------------------------------------------------
@@ -194,6 +205,7 @@ def evaluate(
     annual_vol: float | None = None,
     consensus: float | None = None,
     sentiment: float | None = None,
+    existing_exposure: float = 0.0,
 ) -> Signal:
     """Price one contract and decide.
 
@@ -248,9 +260,11 @@ def evaluate(
     no_edge = ((1.0 - fair) - no_cost) if no_cost is not None else -1.0
 
     if yes_edge >= no_edge and yes_edge > EDGE_THRESHOLD and yes_cost is not None:
-        stake = kelly_size(fair, yes_cost, bankroll)
+        stake = kelly_size(fair, yes_cost, bankroll, existing_exposure)
         if stake <= 0:
-            return nope("edge present but Kelly says zero", tier, fair)
+            return nope(
+                "position cap reached for this market" if existing_exposure > 0
+                else "edge present but Kelly says zero", tier, fair)
         return Signal(
             "buy_yes", symbol, question, tier, fair, mid, yes_cost, yes_edge,
             stake / yes_cost, stake,
@@ -260,9 +274,11 @@ def evaluate(
         )
 
     if no_edge > EDGE_THRESHOLD and no_cost is not None:
-        stake = kelly_size(1.0 - fair, no_cost, bankroll)
+        stake = kelly_size(1.0 - fair, no_cost, bankroll, existing_exposure)
         if stake <= 0:
-            return nope("edge present but Kelly says zero", tier, fair)
+            return nope(
+                "position cap reached for this market" if existing_exposure > 0
+                else "edge present but Kelly says zero", tier, fair)
         return Signal(
             "buy_no", symbol, question, tier, fair, mid, no_cost, no_edge,
             stake / no_cost, stake,

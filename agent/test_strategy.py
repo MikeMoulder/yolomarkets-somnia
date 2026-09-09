@@ -112,6 +112,39 @@ check(abs((qs[0].price + qs[1].price) - (1 - 2*0.02)) < 1e-9,
 skewed = S.make_quotes(fair=0.5, bankroll=1000, inventory_skew=1.0)
 check(skewed[0].price < qs[0].price, "long inventory shades the YES bid down")
 
+
+
+# --- position cap across passes ---------------------------------------------
+# The bug this guards: MAX_POSITION_FRACTION capped a single ORDER, not total
+# exposure, so a desk running every 45s re-bought the same standing edge on
+# every pass. Observed live at 2,913 contracts in one market.
+print()
+cap = 1000 * S.MAX_POSITION_FRACTION
+check(abs(S.kelly_size(0.60, 0.50, 1000, existing_exposure=0) - 50.0) < 1e-9,
+      "no existing exposure -> normal quarter-Kelly stake")
+check(S.kelly_size(0.99, 0.10, 1000, existing_exposure=0) == cap,
+      "per-order cap still binds", str(cap))
+check(S.kelly_size(0.99, 0.10, 1000, existing_exposure=cap) == 0.0,
+      "at the cap -> refuses to add")
+check(S.kelly_size(0.99, 0.10, 1000, existing_exposure=cap * 2) == 0.0,
+      "over the cap -> refuses to add")
+half = S.kelly_size(0.99, 0.10, 1000, existing_exposure=cap / 2)
+check(abs(half - cap / 2) < 1e-9, "half exposed -> only the headroom is offered",
+      f"{half} vs headroom {cap/2}")
+check(S.kelly_size(0.99, 0.10, 1000, existing_exposure=float("inf")) == 0.0,
+      "unknown exposure (inf) -> refuses to open")
+
+capped = S.evaluate(symbol="s", question="q", seconds_left=300, best_bid=0.30,
+                    best_ask=0.35, bankroll=1000, spot=2600.0, strike=2494.0,
+                    annual_vol=0.6, existing_exposure=cap)
+check(capped.action == "pass" and "cap" in capped.reason,
+      "evaluate passes on a capped market and says why", capped.reason)
+
+blind = S.evaluate(symbol="s", question="q", seconds_left=300, best_bid=0.30,
+                   best_ask=0.35, bankroll=1000, spot=2600.0, strike=2494.0,
+                   annual_vol=0.6, existing_exposure=float("inf"))
+check(blind.action == "pass", "evaluate refuses to open when exposure is unknown")
+
 print()
 print(f"{len(fails)} failed" if fails else "all strategy checks passed")
 sys.exit(1 if fails else 0)

@@ -174,6 +174,14 @@ def run_pass(*, make_markets: bool = False,
     # ---- settle first: free up collateral before spending it ---------------
     result.redeemed = claim_settled()
 
+    # What we already hold, keyed by marketId. The position cap is enforced on
+    # TOTAL exposure, so a standing edge cannot be re-bought every pass.
+    exposure = current_exposure()
+    if exposure is None:
+        result.notes.append(
+            "portfolio unreadable - no new entries this pass (the position cap "
+            "cannot be enforced without it)")
+
     markets = bridge.markets(limit=MAX_MARKETS,
                              min_seconds_left=S.MIN_SECONDS_TO_EXPIRY)
     result.considered = len(markets)
@@ -216,6 +224,8 @@ def run_pass(*, make_markets: bool = False,
             spot=spot,
             strike=strike,
             annual_vol=vol,
+            existing_exposure=(exposure.get(m["marketId"], 0.0)
+                               if exposure is not None else float("inf")),
         )
         if sig.fair is not None:
             result.priced += 1
@@ -303,6 +313,33 @@ def rest_quotes(signals: list[S.Signal], bankroll: float) -> list[dict]:
                     + ("  [DRY]" if res.get("dryRun") else ""))
             except Exception as e:
                 log(f"quote failed on {sig.symbol}: {e}")
+    return out
+
+
+def current_exposure() -> dict[str, float] | None:
+    """Marked value of open positions, keyed by marketId. None if unreadable.
+
+    Both sides of a market count toward the same cap: holding YES and NO in one
+    contract is still capital committed to it, and netting them here would let
+    the cap be walked around by alternating sides.
+
+    Returning None rather than an empty dict matters. An empty dict reads as
+    "no exposure anywhere", which would silently disable the position cap at
+    exactly the moment we cannot verify it - so the caller opens nothing on a
+    pass where this fails.
+    """
+    try:
+        p = bridge.portfolio()
+    except Exception as e:
+        log(f"exposure read failed: {e}")
+        return None
+
+    out: dict[str, float] = {}
+    for pos in p.get("open", []):
+        mid = pos.get("marketId")
+        if not mid:
+            continue
+        out[mid] = out.get(mid, 0.0) + float(pos.get("value") or 0.0)
     return out
 
 
