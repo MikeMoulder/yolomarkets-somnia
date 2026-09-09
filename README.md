@@ -172,6 +172,10 @@ The **price feed** (`SOMNIA_TESTNET_PRICE_FEED`) is what makes the whole
 strategy possible - it is the oracle these contracts settle on, so reading it is
 how the desk prices a contract instead of guessing at it.
 
+Building this deep against the SDK turned up nine things worth reporting back,
+three of which cost real testnet money because they fail silently rather than
+throwing. They are written up in **[FEEDBACK.md](FEEDBACK.md)**.
+
 ---
 
 ## The pricing model
@@ -324,6 +328,7 @@ agent/
   chat_service.py          the streaming chat copilot
   bridge_client.py         the only path from Python to the chain
   test_strategy.py         assertions on the pricing math
+FEEDBACK.md                SDK + docs feedback report
 ```
 
 ## Testing
