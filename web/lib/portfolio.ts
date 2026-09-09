@@ -4,6 +4,7 @@
 // so this module is mostly shaping: scaling raw balances, mirroring the YES
 // book price onto NO positions, and splitting open from settled.
 import type { Address } from "viem";
+import { priceToProbability } from "@somnia-chain/markets-sdk";
 import { getExchange, COLLATERAL_DECIMALS } from "./somnia";
 
 export type Position = {
@@ -48,10 +49,14 @@ function scale(raw: string | null | undefined, decimals: number): number {
     return Number.isFinite(n) ? n : 0;
 }
 
-/** Prices arrive as 18-dec fixed point regardless of collateral decimals. */
-function prob(raw: string | null | undefined): number | null {
+/**
+ * Raw prices are fixed-point in the market's QUOTE decimals, not a fixed 1e18.
+ * Getting this wrong is silent until a market trades, and then every mark reads
+ * as ~0 - so take the decimals from the market row and let the SDK convert.
+ */
+function prob(raw: string | null | undefined, decimals: number): number | null {
     if (!raw) return null;
-    const n = Number(raw) / 1e18;
+    const n = priceToProbability(raw, decimals);
     return Number.isFinite(n) && n > 0 && n < 1 ? n : null;
 }
 
@@ -63,8 +68,9 @@ export async function getPortfolio(account: Address): Promise<PortfolioView> {
     const positions: Position[] = p.positions
         .map((row) => {
             const m = row.market;
-            const contracts = scale(row.balance, COLLATERAL_DECIMALS);
-            const yesMark = prob(m.lastPrice);
+            const decimals = m.quoteDecimals ?? COLLATERAL_DECIMALS;
+            const contracts = scale(row.balance, decimals);
+            const yesMark = prob(m.lastPrice, decimals);
             const isYes = row.outcomeIndex === 0;
             // The book quotes YES; the NO mark is its mirror.
             const mark = yesMark === null ? null : isYes ? yesMark : 1 - yesMark;

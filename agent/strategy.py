@@ -313,3 +313,53 @@ def make_quotes(
     if no_px > 0:
         quotes.append(Quote("NO", no_px, round(stake / no_px, 3)))
     return quotes
+
+
+# --------------------------------------------------------------------------
+# Price scale inference
+# --------------------------------------------------------------------------
+
+# The venue does not post levels at one consistent scale. Most markets give
+# strikes and opening prices as integers scaled by 100 ("249027" = 2490.27),
+# but the long-dated series (1080h) use 1e8 ("245058000000" = 2450.58). Both
+# were observed live on the same venue in the same minute.
+#
+# Hardcoding either one is how you end up pricing a contract off a strike that
+# is six orders of magnitude wrong - and a wrong strike does not error, it just
+# prices the contract as a dead certainty and sizes into it. So infer: try the
+# plausible divisors and accept the one that lands near spot.
+CANDIDATE_SCALES = (100.0, 1e6, 1e8, 1e18)
+
+# How far from spot a level may sit and still be believed. Strikes cluster very
+# close to spot in practice; this is wide enough for a deep out-of-the-money
+# strike and far too narrow to admit a scale error.
+SCALE_SANITY_LO = 0.5
+SCALE_SANITY_HI = 2.0
+
+
+def infer_level(raw: str | int | float | None, spot: float | None) -> float | None:
+    """Decode a venue-posted price level into human units, or None.
+
+    Returns None rather than guessing when nothing lands near spot: refusing to
+    price is always cheaper than trading on a misread number.
+    """
+    if raw is None or str(raw) in ("", "0"):
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+
+    if not spot or spot <= 0:
+        # With no spot to check against, the common scale is the only defensible
+        # assumption - but the caller still cannot verify it, so this path is
+        # only for display, never for sizing.
+        return value / 100.0
+
+    for scale in CANDIDATE_SCALES:
+        candidate = value / scale
+        if SCALE_SANITY_LO * spot <= candidate <= SCALE_SANITY_HI * spot:
+            return candidate
+    return None

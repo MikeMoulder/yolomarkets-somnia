@@ -112,59 +112,32 @@ class FeedCache:
         return self._vol[asset]
 
 
-# Both `strike` and the posted opening price are integers scaled by 100:
-# "249595" is 2495.95. This is NOT the 18-decimal scale the price feed's own
-# `raw` values use, and assuming 1e18 here silently produced strikes around
-# 2.5e-13 — under which every contract prices as a dead certainty (fair = 1.0)
-# and the desk wanted to buy YES on all of them at any ask. Caught only because
-# "every market is a sure thing" is obviously wrong; a subtler scale error
-# would not announce itself, hence the sanity band below.
-PRICE_SCALE = 100.0
-
-# A strike this far from spot is treated as a units bug, not a real contract.
-# Venue strikes sit within a fraction of a percent of spot; anything outside
-# this band means we misread the number, and the correct response is to refuse
-# to price it rather than to trade on it.
-STRIKE_SANITY_LO = 0.5
-STRIKE_SANITY_HI = 2.0
-
-
 def strike_for(market: dict, feeds: FeedCache, openings: dict[str, str | None]) -> float | None:
     """The level this contract settles against, or None if unpriceable.
 
     Two shapes exist. A "fixed" market carries an explicit strike. A
     "reference" market has strike 0 and settles against its own opening price,
-    which the venue posts shortly after the round opens — before that it is
+    which the venue posts shortly after the round opens - before that it is
     genuinely unpriceable and we skip it rather than guess.
+
+    Both arrive as integers at a scale the venue does not keep consistent, so
+    the decoding is inferred against spot (see strategy.infer_level).
     """
-    raw = market.get("strike")
-    level: float | None = None
-
-    if raw and str(raw) not in ("0", ""):
-        try:
-            level = float(raw) / PRICE_SCALE
-        except ValueError:
-            return None
-    else:
-        posted = openings.get(market["marketId"])
-        if not posted:
-            return None
-        try:
-            level = float(posted) / PRICE_SCALE
-        except ValueError:
-            return None
-
-    if level is None or level <= 0:
-        return None
-
-    # Cross-check against spot. This is the guard that would have caught the
-    # 1e18 bug on its own.
     asset = (market.get("asset") or "").upper()
     spot = feeds.spot(asset) if asset else None
-    if spot and not (STRIKE_SANITY_LO * spot <= level <= STRIKE_SANITY_HI * spot):
-        log(f"strike sanity: {market.get('symbol')} K={level:g} vs spot={spot:g} — refusing to price")
+    if not spot:
         return None
 
+    raw = market.get("strike")
+    if not raw or str(raw) in ("0", ""):
+        raw = openings.get(market["marketId"])
+    if not raw:
+        return None
+
+    level = S.infer_level(raw, spot)
+    if level is None:
+        log(f"scale: {market.get('symbol')} level {raw} matches no known scale "
+            f"near spot {spot:g} - refusing to price")
     return level
 
 

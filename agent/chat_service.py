@@ -170,18 +170,16 @@ def _fair_value(m: dict[str, Any]) -> tuple[float | None, str]:
         return None, "no price feed for this asset"
 
     raw = m.get("strike")
-    if raw and str(raw) not in ("0", ""):
-        strike = float(raw) / 100.0
-    else:
-        posted = bridge.opening_prices([m["marketId"]]).get(m["marketId"])
-        if not posted:
+    if not raw or str(raw) in ("0", ""):
+        raw = bridge.opening_prices([m["marketId"]]).get(m["marketId"])
+        if not raw:
             return None, "opening price not posted yet"
-        strike = float(posted) / 100.0
 
-    # Same sanity band the desk uses: a strike far from spot means we misread
-    # the units, and refusing to price beats trading on a scale bug.
-    if not (0.5 * spot <= strike <= 2.0 * spot):
-        return None, "strike failed the sanity check against spot"
+    # The venue posts levels at more than one scale, so decode against spot
+    # rather than assuming one (see strategy.infer_level).
+    strike = S.infer_level(raw, spot)
+    if strike is None:
+        return None, "price level matches no known scale near spot"
 
     p = S.probability_above(spot, strike, float(m["secondsLeft"]), vol)
     return p, (f"spot {spot:.2f} vs strike {strike:.2f}, {m['secondsLeft']}s left, "

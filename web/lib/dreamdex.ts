@@ -8,7 +8,7 @@
 // caller (see `lib/with-deadline.ts`). A hung indexer must degrade to an empty
 // list, never to a page that streams forever - during SSR that failure mode is
 // invisible, because the shell has already been sent.
-import type { BinaryMarket } from "@somnia-chain/markets-sdk";
+import { priceToProbability, type BinaryMarket } from "@somnia-chain/markets-sdk";
 import { getLoadedExchange, getExchange } from "./somnia";
 
 /**
@@ -83,20 +83,21 @@ function num(v: string | number | null | undefined): number {
 }
 
 /**
- * The indexer returns 18-dec fixed-point strings for prices even though the
- * collateral is 6-dec: a YES probability of 0.62 arrives as
- * "620000000000000000". Dividing by 1e18 is right for prices; volumes are in
- * quote token units and use the quote decimals.
+ * Raw book prices are fixed-point in the market's QUOTE decimals - 6 on this
+ * testnet, 18 on mainnet - not a fixed 1e18. Hand-rolling the divisor gets you
+ * a probability of 1.5e-13 the moment a market actually trades, so defer to the
+ * SDK's own converter and pass the market's decimals through.
  */
-function priceToProb(v: string | null | undefined): number | null {
+function priceToProb(v: string | null | undefined, decimals: number): number | null {
     if (v === null || v === undefined || v === "") return null;
-    const n = Number(v) / 1e18;
+    const n = priceToProbability(v, decimals);
     return Number.isFinite(n) && n > 0 && n < 1 ? n : null;
 }
 
 function toEventMarket(row: BinaryMarket, nowSec: number): EventMarket {
     const r = row as unknown as Record<string, string | number | boolean | null>;
     const expiry = num(r.expiry as string);
+    const quoteDecimals = r.quoteDecimals ? Number(r.quoteDecimals) : QUOTE_DECIMALS;
     const symbol = binarySymbol(r);
     return {
         marketId: (r.marketId ?? r.id) as `0x${string}`,
@@ -122,8 +123,8 @@ function toEventMarket(row: BinaryMarket, nowSec: number): EventMarket {
         poolAddress: r.poolAddress as `0x${string}`,
         marketAddress: r.marketAddress as `0x${string}`,
         venueId: (r.venueId as string) ?? "",
-        lastPrice: priceToProb(r.lastPrice as string),
-        volume: num(r.cumulativeQuoteVolume as string) / 10 ** QUOTE_DECIMALS,
+        lastPrice: priceToProb(r.lastPrice as string, quoteDecimals),
+        volume: num(r.cumulativeQuoteVolume as string) / 10 ** quoteDecimals,
         tradeCount: num(r.tradeCount as string),
     };
 }

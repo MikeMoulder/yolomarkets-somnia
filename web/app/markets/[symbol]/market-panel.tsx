@@ -12,10 +12,8 @@ import type { EventMarket, Book, BookLevel } from "@/lib/dreamdex";
 import { TradeTicket } from "@/components/trade-ticket";
 import { ProbBar } from "@/components/prob-bar";
 import { Countdown } from "@/components/countdown";
+import { priceToProbability, toHuman } from "@somnia-chain/markets-sdk";
 import { COLLATERAL_DECIMALS } from "@/lib/somnia";
-
-/** Book prices are 18-dec fixed point; sizes are raw collateral units. */
-const PRICE_SCALE = 1e18;
 
 export function MarketPanel({
     market,
@@ -173,11 +171,17 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
     );
 }
 
+/**
+ * Live-tail levels arrive as raw bigints in the market's collateral decimals -
+ * NOT a fixed 1e18. The SDK's own converters are used rather than a local
+ * divisor because the scale differs between testnet (6) and mainnet (18), and
+ * getting it wrong renders every price as zero.
+ */
 function toLevels(levels: readonly { price: bigint; quantity: bigint }[] | undefined): BookLevel[] {
     if (!levels?.length) return [];
     return levels.map((l) => [
-        Number(l.price) / PRICE_SCALE,
-        Number(l.quantity) / 10 ** COLLATERAL_DECIMALS,
+        priceToProbability(l.price, COLLATERAL_DECIMALS),
+        toHuman(l.quantity, COLLATERAL_DECIMALS),
     ]);
 }
 
